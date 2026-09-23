@@ -139,10 +139,12 @@ float saScatterOutsideLower(int qx, int qy, int radius, int originX, int originY
 }
 
 // 同じ距離のときは、AE版で候補を追加した順 (ブロック行 → ブロック列 → サブセル行 → サブセル列) を優先します。
+// 窓の外 (負の添字) では意味のない値になりますが、窓の外のマスは使いません。
 int saScatterOrder(int x, int y)
 {
-    return ((y / SCATTER_SUBDIV) * 5 + (x / SCATTER_SUBDIV)) * (SCATTER_SUBDIV * SCATTER_SUBDIV) +
-           (y % SCATTER_SUBDIV) * SCATTER_SUBDIV + (x % SCATTER_SUBDIV);
+    uint ux = (uint)x;
+    uint uy = (uint)y;
+    return (int)(((uy / 4u) * 5u + (ux / 4u)) * 16u + (uy % 4u) * 4u + (ux % 4u));
 }
 
 // 密度モード。画素が属する解析ブロックを中心とした5x5ブロック (20x20サブセル) の種から、
@@ -325,60 +327,60 @@ float4 saInk(float4 p, float4 rgb, float e)
 
 float4 saRenderPixel(float2 scene, RenderSettings s)
 {
-    // 量0は元の映像そのもの。セルを探さずに返します。
-    if (s.amount <= 0.0f)
-        return saSampleZero(saPixelCenter(scene), s.imageRect);
+    float4 original = saSampleZero(saPixelCenter(scene), s.imageRect);
+    float4 result = original;
+    // 量0は元の映像そのもの。セルを探しません。
+    if (s.amount > 0.0f)
+    {
+        float2 local = float2(scene.x - s.anchor.x, scene.y - s.anchor.y);
+        CellResult c;
+        if (s.adaptive != 0)
+            c = saScatterCells(local, s.size, s.jitter, s.seed);
+        else
+            c = saUniformCells(local, s.size, s.jitter, s.seed);
 
-    float2 local = float2(scene.x - s.anchor.x, scene.y - s.anchor.y);
-    CellResult c;
-    if (s.adaptive != 0)
-        c = saScatterCells(local, s.size, s.jitter, s.seed);
-    else
-        c = saUniformCells(local, s.size, s.jitter, s.seed);
-
-    float4 p;
-    if (s.outputMode == OUTPUT_BORDERS)
-    {
-        // 輪郭の太さが0でも境界が見えるよう、既定の幅を使います。
-        float v = saBand(c.border, s.edgeWidth > 0.0f ? s.edgeWidth : 1.5f, s.edgeHard, s.smoothing);
-        p = float4(v, v, v, 1.0f);
-    }
-    else if (s.outputMode == OUTPUT_DISTANCE)
-    {
-        float feature = sqrt(s.size.x * s.size.y) * 0.45f;
-        float v = saClamp01(c.border / (feature > 1.0f ? feature : 1.0f));
-        p = float4(v, v, v, 1.0f);
-    }
-    else if (s.outputMode == OUTPUT_SEEDS)
-    {
-        float v = 1.0f - saSmoothstep(1.5f, 3.5f, c.d1);
-        p = float4(v, v, v, 1.0f);
-    }
-    else
-    {
-        float4 own = saSampleSite(c.site, s);
-        p = own;
-        bool drawEdge = s.edgeOn != 0 && s.edgeWidth > 0.0f && s.edgeColor.w > 0.0f;
-        if (s.smoothing > 0.0f || drawEdge)
+        float4 p;
+        if (s.outputMode == OUTPUT_BORDERS)
         {
-            float4 other = saSampleSite(c.neighbour, s);
-            // 境界上で隣のセルと半々になるよう、境界からの距離に応じて隣の色を混ぜます。
-            if (s.smoothing > 0.0f)
-                p = saLerp4(other, own, saClamp01(0.5f + c.border / s.smoothing));
-            if (drawEdge)
+            // 輪郭の太さが0でも境界が見えるよう、既定の幅を使います。
+            float v = saBand(c.border, s.edgeWidth > 0.0f ? s.edgeWidth : 1.5f, s.edgeHard, s.smoothing);
+            p = float4(v, v, v, 1.0f);
+        }
+        else if (s.outputMode == OUTPUT_DISTANCE)
+        {
+            float feature = sqrt(s.size.x * s.size.y) * 0.45f;
+            float v = saClamp01(c.border / (feature > 1.0f ? feature : 1.0f));
+            p = float4(v, v, v, 1.0f);
+        }
+        else if (s.outputMode == OUTPUT_SEEDS)
+        {
+            float v = 1.0f - saSmoothstep(1.5f, 3.5f, c.d1);
+            p = float4(v, v, v, 1.0f);
+        }
+        else
+        {
+            float4 own = saSampleSite(c.site, s);
+            p = own;
+            bool drawEdge = s.edgeOn != 0 && s.edgeWidth > 0.0f && s.edgeColor.w > 0.0f;
+            if (s.smoothing > 0.0f || drawEdge)
             {
-                // 両側とも透明な境界には輪郭を引きません。
-                float island = own.w > other.w ? own.w : other.w;
-                float e = saBand(c.border, s.edgeWidth, s.edgeHard, s.smoothing) * s.edgeColor.w * island;
-                if (e > 0.0f)
-                    p = saInk(p, s.edgeColor, e);
+                float4 other = saSampleSite(c.neighbour, s);
+                // 境界上で隣のセルと半々になるよう、境界からの距離に応じて隣の色を混ぜます。
+                if (s.smoothing > 0.0f)
+                    p = saLerp4(other, own, saClamp01(0.5f + c.border / s.smoothing));
+                if (drawEdge)
+                {
+                    // 両側とも透明な境界には輪郭を引きません。
+                    float island = own.w > other.w ? own.w : other.w;
+                    float e = saBand(c.border, s.edgeWidth, s.edgeHard, s.smoothing) * s.edgeColor.w * island;
+                    if (e > 0.0f)
+                        p = saInk(p, s.edgeColor, e);
+                }
             }
         }
+        result = s.amount < 1.0f ? saLerp4(original, p, s.amount) : p;
     }
-
-    if (s.amount < 1.0f)
-        p = saLerp4(saSampleZero(saPixelCenter(scene), s.imageRect), p, s.amount);
-    return p;
+    return result;
 }
 
 #endif

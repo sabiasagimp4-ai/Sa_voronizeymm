@@ -142,6 +142,7 @@ float4 saSampleZero(float2 center, float4 imageRect)
 float saRawDensity(float2 samplePosition, float4 imageRect, int mode, float detailGain)
 {
     float2 c = saPixelCenter(samplePosition);
+    float value;
     if (mode == DENSITY_EDGE)
     {
         float4 l = saUnpremultiply(saSampleClamp(float2(c.x - 1.0f, c.y), imageRect));
@@ -150,37 +151,46 @@ float saRawDensity(float2 samplePosition, float4 imageRect, int mode, float deta
         float4 d = saUnpremultiply(saSampleClamp(float2(c.x, c.y + 1.0f), imageRect));
         float gx = saLuminance(r) - saLuminance(l);
         float gy = saLuminance(d) - saLuminance(u);
-        return saClamp01(sqrt(gx * gx + gy * gy) * detailGain);
+        value = saClamp01(sqrt(gx * gx + gy * gy) * detailGain);
     }
-
-    float4 s = saUnpremultiply(saSampleClamp(c, imageRect));
-    float mx = max(s.x, max(s.y, s.z));
-    float mn = min(s.x, min(s.y, s.z));
-    if (mode == DENSITY_SATURATION)
-        return mx > 1e-6f ? (mx - mn) / mx : 0.0f;
-    if (mode == DENSITY_HUE)
+    else
     {
+        float4 s = saUnpremultiply(saSampleClamp(c, imageRect));
+        float mx = max(s.x, max(s.y, s.z));
+        float mn = min(s.x, min(s.y, s.z));
         float chroma = mx - mn;
-        if (chroma <= 1e-6f)
-            return 0.0f;
-        float h;
-        if (mx == s.x)
+        if (mode == DENSITY_SATURATION)
         {
-            h = (s.y - s.z) / chroma;
-            if (h < 0.0f)
-                h += 6.0f;
+            value = mx > 1e-6f ? chroma / mx : 0.0f;
         }
-        else if (mx == s.y)
+        else if (mode == DENSITY_HUE)
         {
-            h = (s.z - s.x) / chroma + 2.0f;
+            float h = 0.0f;
+            if (chroma > 1e-6f)
+            {
+                if (mx == s.x)
+                {
+                    h = (s.y - s.z) / chroma;
+                    if (h < 0.0f)
+                        h += 6.0f;
+                }
+                else if (mx == s.y)
+                {
+                    h = (s.z - s.x) / chroma + 2.0f;
+                }
+                else
+                {
+                    h = (s.x - s.y) / chroma + 4.0f;
+                }
+            }
+            value = h * (1.0f / 6.0f);
         }
         else
         {
-            h = (s.x - s.y) / chroma + 4.0f;
+            value = saLuminance(s);
         }
-        return h * (1.0f / 6.0f);
     }
-    return saLuminance(s);
+    return value;
 }
 
 // 解析ブロック (bx, by) の中心で読んだ生の密度値。
@@ -200,7 +210,7 @@ float saApplyLevels(float a, float black, float white, float gamma)
         white = black + 1e-4f;
     float t = saClamp01((a - black) / (white - black));
     if (gamma > 1e-3f && gamma != 1.0f && t > 0.0f)
-        t = pow(t, 1.0f / gamma);
+        t = pow(abs(t), 1.0f / gamma);
     return t;
 }
 
@@ -210,7 +220,7 @@ float saDensityProbability(float a, float strength, float minDensity)
     a = saClamp01(a);
     strength = saClamp01(strength);
     minDensity = saClamp01(minDensity);
-    float shaped = a > 0.0f ? pow(a, 0.65f) : 0.0f;
+    float shaped = a > 0.0f ? pow(abs(a), 0.65f) : 0.0f;
     float floorProbability = saLerp(minDensity, 1.0f, shaped);
     return saLerp(1.0f, floorProbability, strength);
 }

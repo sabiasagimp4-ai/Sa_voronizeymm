@@ -83,6 +83,8 @@ internal sealed class VoronizeRenderCustomEffect(IGraphicsDevicesAndContext devi
         [CustomEffectProperty(PropertyType.Int32, (int)Properties.OutputMargin)]
         public int OutputMargin { get => outputMargin; set => outputMargin = Math.Max(value, 0); }
 
+        RawRect fullOutputRect;
+
         public Impl() : base(ShaderResourceLoader.Get("VoronizeRender")) { }
 
         protected override void UpdateConstants() => drawInformation?.SetPixelShaderConstantBuffer(constants);
@@ -93,6 +95,7 @@ internal sealed class VoronizeRenderCustomEffect(IGraphicsDevicesAndContext devi
             seedRect = inputRects.Length > 1 ? inputRects[1] : default;
             // 画像の端にかかるセルは外側まで広がるので、その分だけ出力を広げます。
             outputRect = VoronizeLayout.Inflate(inputRect, outputMargin);
+            fullOutputRect = outputRect;
             outputOpaqueSubRect = default;
         }
 
@@ -102,6 +105,12 @@ internal sealed class VoronizeRenderCustomEffect(IGraphicsDevicesAndContext devi
             inputRects[0] = inputRect;
             if (inputRects.Length > 1)
                 inputRects[1] = seedRect;
+        }
+
+        public override RawRect MapInvalidRect(int inputIndex, RawRect invalidInputRect)
+        {
+            // どの入力画素も離れた出力画素に効きうるので、出力全体を無効にします。
+            return fullOutputRect;
         }
 
         // HLSLの定数バッファと同じ並び (float4 x 3 の後に4バイトずつ詰めて92バイト、16バイト単位に切り上げ)。

@@ -24,6 +24,8 @@ internal sealed class VoronizeRangeReduceCustomEffect(IGraphicsDevicesAndContext
         [CustomEffectProperty(PropertyType.Int32, (int)Properties.TileCountY)]
         public int TileCountY { get => constants.TileCountY; set { constants.TileCountY = Math.Max(value, 1); UpdateConstants(); } }
 
+        RawRect fullOutputRect;
+
         public Impl() : base(ShaderResourceLoader.Get("VoronizeRangeReduce")) { }
 
         protected override void UpdateConstants() => drawInformation?.SetPixelShaderConstantBuffer(constants);
@@ -32,12 +34,19 @@ internal sealed class VoronizeRangeReduceCustomEffect(IGraphicsDevicesAndContext
         {
             inputRect = inputRects[0];
             outputRect = new RawRect(0, 0, 1, 1);
+            fullOutputRect = outputRect;
             outputOpaqueSubRect = default;
         }
 
         public override void MapOutputRectToInputRects(RawRect outputRect, RawRect[] inputRects)
         {
             inputRects[0] = inputRect;
+        }
+
+        public override RawRect MapInvalidRect(int inputIndex, RawRect invalidInputRect)
+        {
+            // どの入力画素も離れた出力画素に効きうるので、出力全体を無効にします。
+            return fullOutputRect;
         }
 
         [StructLayout(LayoutKind.Sequential, Size = 16)]

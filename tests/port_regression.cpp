@@ -598,7 +598,7 @@ static Layout layout(const Image& src, const Params& p, bool crop)
     L.block_y0 = floor_div(0.0f - ay, bpy) - 1;
     L.block_y1 = floor_div((float)src.h - ay, bpy) + 1;
     const int nbx = L.block_x1 - L.block_x0 + 1, nby = L.block_y1 - L.block_y0 + 1;
-    L.tile = std::max(1, (std::max(nbx, nby) + 15) / 16);
+    L.tile = std::max(1, (std::max(nbx, nby) + 31) / 32);
     L.tiles_x = (nbx + L.tile - 1) / L.tile;
     L.tiles_y = (nby + L.tile - 1) / L.tile;
     return L;
@@ -849,6 +849,26 @@ int main()
             }
             check(far_changed == 0, std::string(p.name) + ": pixels half a pixel inside a cell stay untouched");
             check(near_changed > 0, std::string(p.name) + ": pixels on a seam are blended");
+        }
+    }
+
+    std::printf("[6] amount 0 returns the source unchanged\n");
+    {
+        for (int adaptive = 0; adaptive <= 1; ++adaptive) {
+            Params p; p.name = adaptive ? "amount 0 adaptive" : "amount 0 uniform";
+            p.amount = 0.0f; p.edge = 2.0f; p.density_mode = adaptive ? D_LUMINANCE : D_UNIFORM;
+            port::Layout L;
+            const std::vector<float> got = port::render(img, p, port::Options(), false, &L, nullptr);
+            const int w = L.out_x1 - L.out_x0;
+            long wrong = 0;
+            for (int y = L.out_y0; y < L.out_y1; ++y)
+                for (int x = L.out_x0; x < L.out_x1; ++x) {
+                    const float* g = &got[((size_t)(y - L.out_y0) * w + (x - L.out_x0)) * 4];
+                    static const float zero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const bool inside = x >= 0 && y >= 0 && x < img.w && y < img.h;
+                    if (pixel_diff(g, inside ? img.at(x, y) : zero) != 0.0f) ++wrong;
+                }
+            check(wrong == 0, std::string(p.name) + ": output equals the source");
         }
     }
 

@@ -75,6 +75,8 @@ internal sealed class VoronizeSeedMapCustomEffect(IGraphicsDevicesAndContext dev
         [CustomEffectProperty(PropertyType.Vector4, (int)Properties.SeedRect)]
         public Vector4 SeedRect { get => seedRect; set => seedRect = value; }
 
+        RawRect fullOutputRect;
+
         public Impl() : base(ShaderResourceLoader.Get("VoronizeSeedMap")) { }
 
         protected override void UpdateConstants() => drawInformation?.SetPixelShaderConstantBuffer(constants);
@@ -85,6 +87,7 @@ internal sealed class VoronizeSeedMapCustomEffect(IGraphicsDevicesAndContext dev
             rangeRect = inputRects.Length > 1 ? inputRects[1] : default;
             // 出力はサブセルの添字の空間にあり、入力の位置とは無関係です。
             outputRect = new RawRect((int)seedRect.X, (int)seedRect.Y, (int)seedRect.Z, (int)seedRect.W);
+            fullOutputRect = outputRect;
             outputOpaqueSubRect = default;
         }
 
@@ -94,6 +97,12 @@ internal sealed class VoronizeSeedMapCustomEffect(IGraphicsDevicesAndContext dev
             inputRects[0] = inputRect;
             if (inputRects.Length > 1)
                 inputRects[1] = rangeRect;
+        }
+
+        public override RawRect MapInvalidRect(int inputIndex, RawRect invalidInputRect)
+        {
+            // どの入力画素も離れた出力画素に効きうるので、出力全体を無効にします。
+            return fullOutputRect;
         }
 
         // HLSLの定数バッファと同じ並び (16バイト x 5)。

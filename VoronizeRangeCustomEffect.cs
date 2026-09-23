@@ -63,6 +63,8 @@ internal sealed class VoronizeRangeCustomEffect(IGraphicsDevicesAndContext devic
         [CustomEffectProperty(PropertyType.Int32, (int)Properties.TileCountY)]
         public int TileCountY { get => tileCountY; set => tileCountY = Math.Max(value, 1); }
 
+        RawRect fullOutputRect;
+
         public Impl() : base(ShaderResourceLoader.Get("VoronizeRange")) { }
 
         protected override void UpdateConstants() => drawInformation?.SetPixelShaderConstantBuffer(constants);
@@ -72,6 +74,7 @@ internal sealed class VoronizeRangeCustomEffect(IGraphicsDevicesAndContext devic
             inputRect = inputRects[0];
             // 出力の1画素が1タイル。入力の位置とは無関係な小さな画像です。
             outputRect = new RawRect(0, 0, tileCountX, tileCountY);
+            fullOutputRect = outputRect;
             outputOpaqueSubRect = default;
         }
 
@@ -79,6 +82,12 @@ internal sealed class VoronizeRangeCustomEffect(IGraphicsDevicesAndContext devic
         {
             // 解析ブロックは画像全体に散らばるので、常に入力全体を読みます。
             inputRects[0] = inputRect;
+        }
+
+        public override RawRect MapInvalidRect(int inputIndex, RawRect invalidInputRect)
+        {
+            // どの入力画素も離れた出力画素に効きうるので、出力全体を無効にします。
+            return fullOutputRect;
         }
 
         // HLSLの定数バッファと同じ並び (16バイト x 4)。
