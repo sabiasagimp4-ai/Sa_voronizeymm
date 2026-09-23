@@ -1,0 +1,56 @@
+name: Inspect
+
+# 一時的な調査用ワークフロー。YMM4のプラグイン基底クラスとD2Dシェーダーヘルパーの
+# 実際の定義をログに出力します。
+
+on:
+  push:
+    branches: ['claude/**']
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Print d2d1effecthelpers.hlsli
+        shell: pwsh
+        run: |
+          $root = 'C:\Program Files (x86)\Windows Kits\10'
+          $include = Get-ChildItem (Join-Path $root 'Include') -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'um\d2d1effecthelpers.hlsli') } |
+            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          Get-Content (Join-Path $include.FullName 'um\d2d1effecthelpers.hlsli')
+
+      - name: Fetch YMM4
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://object-storage.tyo1.conoha.io/v1/nc_4fac3ef0e6d843249e0ab2f1fc3e8f85/public/YukkuriMovieMaker_v4_Lite.zip' -OutFile ymm4.zip
+          Expand-Archive ymm4.zip -DestinationPath ymm4 -Force
+          $plugin = Get-ChildItem ymm4 -Recurse -Filter 'YukkuriMovieMaker.Plugin.dll' | Select-Object -First 1
+          "YMM4_DIR=$($plugin.Directory.FullName)" >> $env:GITHUB_ENV
+          Get-ChildItem $plugin.Directory.FullName -Filter 'YukkuriMovieMaker*.dll' | ForEach-Object { $_.Name }
+          Get-ChildItem $plugin.Directory.FullName -Filter 'Vortice*.dll' | ForEach-Object { "$($_.Name) $($_.VersionInfo.FileVersion)" }
+
+      - name: Inspect plugin API
+        shell: pwsh
+        env:
+          DOTNET_ROLL_FORWARD: Major
+        run: |
+          dotnet tool install -g ilspycmd | Out-Null
+          $dir = $env:YMM4_DIR
+          foreach ($dll in 'YukkuriMovieMaker.Plugin.dll', 'YukkuriMovieMaker.Controls.dll') {
+            "===== types in $dll"
+            ilspycmd -l cise (Join-Path $dir $dll) | Select-String -Pattern 'Shader|CustomEffect|Attribute|VideoEffect|DrawDescription|EffectDescription|Animation|Graphics' | ForEach-Object { $_.Line }
+          }
+          $types = ilspycmd -l c (Join-Path $dir 'YukkuriMovieMaker.Plugin.dll') | Select-String -Pattern 'CustomShader|CustomEffect' | ForEach-Object { ($_.Line -split '\s+')[-1] }
+          foreach ($t in $types) {
+            "===== $t"
+            ilspycmd -r $dir -t $t (Join-Path $dir 'YukkuriMovieMaker.Plugin.dll')
+          }
+          foreach ($t in 'YukkuriMovieMaker.Controls.ColorPickerAttribute', 'YukkuriMovieMaker.Controls.ToggleSliderAttribute', 'YukkuriMovieMaker.Controls.TextBoxSliderAttribute') {
+            "===== $t"
+            ilspycmd -r $dir -t $t (Join-Path $dir 'YukkuriMovieMaker.Controls.dll') | Select-Object -First 40
+          }
