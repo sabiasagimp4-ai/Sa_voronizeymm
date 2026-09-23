@@ -15,15 +15,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Print d2d1effecthelpers.hlsli
-        shell: pwsh
-        run: |
-          $root = 'C:\Program Files (x86)\Windows Kits\10'
-          $include = Get-ChildItem (Join-Path $root 'Include') -Directory |
-            Where-Object { Test-Path (Join-Path $_.FullName 'um\d2d1effecthelpers.hlsli') } |
-            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
-          Get-Content (Join-Path $include.FullName 'um\d2d1effecthelpers.hlsli')
-
       - name: Fetch YMM4
         shell: pwsh
         run: |
@@ -41,16 +32,12 @@ jobs:
         run: |
           dotnet tool install -g ilspycmd | Out-Null
           $dir = $env:YMM4_DIR
-          foreach ($dll in 'YukkuriMovieMaker.Plugin.dll', 'YukkuriMovieMaker.Controls.dll') {
-            "===== types in $dll"
-            ilspycmd -l cise (Join-Path $dir $dll) | Select-String -Pattern 'Shader|CustomEffect|Attribute|VideoEffect|DrawDescription|EffectDescription|Animation|Graphics' | ForEach-Object { $_.Line }
-          }
-          $types = ilspycmd -l c (Join-Path $dir 'YukkuriMovieMaker.Plugin.dll') | Select-String -Pattern 'CustomShader|CustomEffect' | ForEach-Object { ($_.Line -split '\s+')[-1] }
-          foreach ($t in $types) {
+          $plugin = Join-Path $dir 'YukkuriMovieMaker.Plugin.dll'
+          foreach ($t in 'YukkuriMovieMaker.Controls.ColorPickerAttribute', 'YukkuriMovieMaker.Controls.ToggleSliderAttribute', 'YukkuriMovieMaker.Controls.TextBoxSliderAttribute', 'YukkuriMovieMaker.ItemEditor.CustomVisibilityAttributes.ShowPropertyEditorWhenAttribute', 'YukkuriMovieMaker.Controls.AnimationSliderAttribute', 'YukkuriMovieMaker.Plugin.Effects.VideoEffectAttribute') {
             "===== $t"
-            ilspycmd -r $dir -t $t (Join-Path $dir 'YukkuriMovieMaker.Plugin.dll')
+            ilspycmd -r $dir -t $t $plugin | Select-String -Pattern 'public |class ' | ForEach-Object { $_.Line }
           }
-          foreach ($t in 'YukkuriMovieMaker.Controls.ColorPickerAttribute', 'YukkuriMovieMaker.Controls.ToggleSliderAttribute', 'YukkuriMovieMaker.Controls.TextBoxSliderAttribute') {
-            "===== $t"
-            ilspycmd -r $dir -t $t (Join-Path $dir 'YukkuriMovieMaker.Controls.dll') | Select-Object -First 40
-          }
+          ilspycmd -r $dir -p -o community (Join-Path $dir 'YukkuriMovieMaker.Plugin.Community.dll') | Out-Null
+          "===== community usages"
+          Get-ChildItem community -Recurse -Filter *.cs | Select-String -Pattern 'GroupName|ColorPicker|ShowPropertyEditorWhen|ToggleSlider|System.Windows.Media.Color ' |
+            Select-Object -First 80 | ForEach-Object { "$($_.Filename):$($_.LineNumber): $($_.Line.Trim())" }
