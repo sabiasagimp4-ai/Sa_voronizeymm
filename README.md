@@ -50,32 +50,5 @@ After Effects 用プラグイン [Sa_voronize](https://github.com/sabiasagimp4-a
 | セルの角を滑らかに | 50% | セルの継ぎ目のギザギザを均す強さ。0%でオフ |
 | 元画像の範囲で切り抜く | オフ | 元の画像の外にはみ出したセルを切り落とします |
 
-## AE版との違い
 
-- **参照レイヤー**と**マップヒストグラム**はありません。YMM4 の映像エフェクトは別のアイテムを入力にできないためです。
-- **セルの角を滑らかに**は、AE版の画面全体の後処理（loilo-inc/smooth の移植）ではなく、セルの境界からの距離で隣のセルの色を混ぜるアンチエイリアスです。50%でおよそ1px幅になります。
-- **マップを自動補正**は YMM4 版で追加した項目です。AE版は「幅と高さを別指定」がオフのときだけ自動で引き伸ばします。オフにすると値をそのまま使うので、動画でセル配置が揺れにくくなります。
-- セルの格子はアイテムの中心を原点にします。
-- 元画像の外に広げる幅は、セル（密度モードでは解析ブロック）の1.5倍です。
 
-## インストール
-
-[Releaseページ](https://github.com/sabiasagimp4-ai/Sa_voronizeymm/releases) から `.ymme` ファイルをダウンロードし、YMM4で開いてください。
-
-リリース前のビルドは、Actions の各実行の Artifacts（`Sa_voronize`）からも取得できます。
-
-## ビルド
-
-Windows SDK の `fxc.exe` と YMM4 のフォルダーを指定します。
-
-```powershell
-dotnet build .\SaVoronize.csproj -c Release -p:YMM4DirPath=C:/YMM4/ -p:FxcPath="C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\fxc.exe"
-```
-
-## テスト
-
-シェーダーの共通部（`Shaders/*.hlsli`）を C++ としてコンパイルし、AE版の計算（`tests/reference/`）と画素単位で比べます。
-
-```bash
-bash tests/run_tests.sh
-```
