@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>SaVoronize</AssemblyName>
+    <RootNamespace>SaVoronize</RootNamespace>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)=/_/</PathMap>
+    <FxcPath Condition="'$(FxcPath)' == ''">$(WindowsSdkBinPath)x64\fxc.exe</FxcPath>
+    <D2DIncludePath Condition="'$(D2DIncludePath)' == ''">$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\um</D2DIncludePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="YukkuriMovieMaker.Controls"><HintPath>$(YMM4DirPath)YukkuriMovieMaker.Controls.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="YukkuriMovieMaker.Plugin"><HintPath>$(YMM4DirPath)YukkuriMovieMaker.Plugin.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SharpGen.Runtime"><HintPath>$(YMM4DirPath)SharpGen.Runtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SharpGen.Runtime.COM"><HintPath>$(YMM4DirPath)SharpGen.Runtime.COM.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Vortice.Direct2D1"><HintPath>$(YMM4DirPath)Vortice.Direct2D1.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Vortice.DirectX"><HintPath>$(YMM4DirPath)Vortice.DirectX.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Vortice.Mathematics"><HintPath>$(YMM4DirPath)Vortice.Mathematics.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- InputCount は d2d1effecthelpers.hlsli の D2D_INPUT_COUNT。C#側の [CustomEffect(n)] と揃えます。 -->
+  <ItemGroup>
+    <VoronizeShader Include="Shaders\VoronizeRange.hlsl" InputCount="1" />
+    <VoronizeShader Include="Shaders\VoronizeRangeReduce.hlsl" InputCount="1" />
+    <VoronizeShader Include="Shaders\VoronizeSeedMap.hlsl" InputCount="2" />
+    <VoronizeShader Include="Shaders\VoronizeRender.hlsl" InputCount="2" />
+    <VoronizeShaderInclude Include="Shaders\*.hlsli" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)VoronizeRange.cso" LogicalName="SaVoronize.VoronizeRange.cso" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)VoronizeRangeReduce.cso" LogicalName="SaVoronize.VoronizeRangeReduce.cso" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)VoronizeSeedMap.cso" LogicalName="SaVoronize.VoronizeSeedMap.cso" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)VoronizeRender.cso" LogicalName="SaVoronize.VoronizeRender.cso" />
+  </ItemGroup>
+
+  <Target Name="CompileShaders" BeforeTargets="PrepareResources" Inputs="@(VoronizeShader);@(VoronizeShaderInclude)" Outputs="@(VoronizeShader->'$(IntermediateOutputPath)%(Filename).cso')">
+    <Error Condition="!Exists('$(FxcPath)')" Text="fxc.exe was not found. Set -p:FxcPath to the Windows SDK x64 fxc.exe path." />
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Exec Command="&quot;$(FxcPath)&quot; /nologo /I &quot;$(D2DIncludePath)&quot; /D D2D_INPUT_COUNT=%(VoronizeShader.InputCount) /T ps_4_0 /E main /Fo &quot;$(IntermediateOutputPath)%(VoronizeShader.Filename).cso&quot; &quot;%(VoronizeShader.FullPath)&quot;" />
+  </Target>
+</Project>
