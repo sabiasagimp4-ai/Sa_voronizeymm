@@ -3,9 +3,6 @@
 ![Sa_voronize サンプル](docs/samples/gallery.jpg)
 
 After Effects 用プラグイン [Sa_voronize](https://github.com/sabiasagimp4-ai/Sa_voronize) の YMM4 版です。画像をボロノイ図（不規則な多角形セル）のモザイクに変換します。セルの密集具合を画像の明るさ・色・輪郭から自動で決められます。
-
-上の画像は、シェーダーの計算を CPU で再現した出力です（左上から 均一＋輪郭、輝度、エッジ検出、境界表示）。
-
 ## パラメーター
 
 ### グリッド
